@@ -1,0 +1,1114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Local Chat</title>
+  <style>
+    :root {
+      --bg: #030303;
+      --panel: #050505;
+      --panel-solid: #090909;
+      --ink: #f2f2f2;
+      --muted: #9a9a9a;
+      --line: rgba(255, 255, 255, 0.12);
+      --accent: #d2d2d2;
+      --accent-strong: #f4f4f4;
+      --accent-soft: rgba(255, 255, 255, 0.12);
+      --danger: #c7c7c7;
+      --danger-soft: rgba(255, 255, 255, 0.1);
+      --shadow: 0 24px 90px rgba(0, 0, 0, 0.72);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      color: var(--ink);
+      font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+      background: #000;
+      overflow: hidden;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      height: 100%;
+      padding: 18px;
+      gap: 18px;
+    }
+
+    .sidebar,
+    .chat {
+      min-height: 0;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .brand {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.2rem;
+      letter-spacing: -0.035em;
+    }
+
+    .brand p {
+      display: none;
+    }
+
+    .new-chat {
+      width: calc(100% - 32px);
+      margin: 16px;
+      padding: 12px 15px;
+      border-radius: 999px;
+      color: #080808;
+      background: var(--accent);
+      font-size: 1.4rem;
+      font-weight: 900;
+      transition: transform 160ms ease, background 160ms ease;
+    }
+
+    .new-chat:hover {
+      background: var(--accent-strong);
+      transform: translateY(-1px);
+    }
+
+    .conversation-list {
+      flex: 1;
+      overflow: auto;
+      padding: 0 12px 12px;
+    }
+
+    .conversation {
+      width: 100%;
+      margin: 4px 0;
+      padding: 6px;
+      border-radius: 16px;
+      color: var(--ink);
+      background: transparent;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .conversation:hover,
+    .conversation.active {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .conversation-main {
+      width: 100%;
+      min-width: 0;
+      padding: 9px 8px;
+      border-radius: 12px;
+      color: var(--ink);
+      background: transparent;
+      text-align: left;
+      display: grid;
+      gap: 2px;
+    }
+
+    .conversation-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 700;
+    }
+
+    .conversation-time {
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+
+    .conversation-actions {
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+
+    .conversation:hover .conversation-actions,
+    .conversation.active .conversation-actions {
+      opacity: 1;
+    }
+
+    .icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      color: var(--muted);
+      background: transparent;
+      display: inline-grid;
+      place-items: center;
+      font-size: 0.98rem;
+    }
+
+    .icon-btn:hover {
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .icon-btn.delete-chat:hover {
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .sidebar-footer {
+      padding: 14px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 9px;
+    }
+
+    .secondary,
+    .danger {
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--ink);
+      text-align: center;
+    }
+
+    .danger {
+      color: var(--danger);
+    }
+
+    .chat {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      border-radius: calc(var(--radius) + 8px);
+      overflow: hidden;
+    }
+
+    .topbar {
+      min-width: 0;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 1.25rem;
+      letter-spacing: -0.025em;
+    }
+
+    .model-pill {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border-radius: 999px;
+      color: var(--accent-strong);
+      background: var(--accent-soft);
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .messages {
+      overflow: auto;
+      padding: 26px clamp(16px, 4vw, 48px);
+      scroll-behavior: smooth;
+    }
+
+    .empty {
+      display: none;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      margin: 0 auto 18px;
+      max-width: 920px;
+      animation: rise 240ms ease both;
+    }
+
+    .message.user {
+      align-items: flex-end;
+    }
+
+    .message.assistant {
+      align-items: flex-start;
+    }
+
+    .bubble {
+      max-width: min(760px, 86%);
+      padding: 15px 17px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid var(--line);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .user .bubble {
+      color: #080808;
+      background: var(--accent);
+      border-color: transparent;
+      border-bottom-right-radius: 7px;
+    }
+
+    .assistant .bubble {
+      border-bottom-left-radius: 7px;
+    }
+
+    .message-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 5px;
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+
+    .message:hover .message-actions {
+      opacity: 1;
+    }
+
+    .message-action {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      color: var(--muted);
+      background: transparent;
+      display: inline-grid;
+      place-items: center;
+      font-size: 0.88rem;
+    }
+
+    .message-action:hover {
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .message-editor {
+      display: grid;
+      gap: 8px;
+      width: min(860px, 94%);
+    }
+
+    .message.user .message-editor {
+      justify-items: end;
+    }
+
+    .message-editor textarea {
+      width: 100%;
+      min-height: 180px;
+      max-height: 560px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: var(--panel-solid);
+      color: var(--ink);
+      resize: vertical;
+      white-space: pre-wrap;
+      line-height: 1.55;
+    }
+
+    .message.user .message-editor textarea {
+      color: #080808;
+      background: var(--accent);
+    }
+
+    .edit-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .edit-save,
+    .edit-cancel {
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--ink);
+    }
+
+    .edit-save {
+      color: #080808;
+      background: var(--accent);
+    }
+
+    .composer-wrap {
+      padding: 16px clamp(14px, 4vw, 36px) 20px;
+      border-top: 1px solid var(--line);
+      background: #030303;
+    }
+
+    .composer {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 10px;
+      border: 1px solid var(--line);
+      background: var(--panel-solid);
+      border-radius: 22px;
+      padding: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      max-height: 180px;
+      min-height: 48px;
+      resize: none;
+      border: 0;
+      outline: 0;
+      padding: 12px 10px;
+      color: var(--ink);
+      background: transparent;
+      line-height: 1.45;
+    }
+
+    .send {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      color: #080808;
+      background: var(--accent);
+      font-size: 1.15rem;
+      font-weight: 900;
+    }
+
+    .send:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+    }
+
+    .send.cancel {
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .hint {
+      display: none;
+    }
+
+    dialog {
+      width: min(620px, calc(100vw - 28px));
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      color: var(--ink);
+      background: var(--panel-solid);
+      box-shadow: var(--shadow);
+      padding: 0;
+    }
+
+    dialog::backdrop {
+      background: rgba(0, 0, 0, 0.58);
+      backdrop-filter: blur(6px);
+    }
+
+    .settings {
+      padding: 24px;
+    }
+
+    .settings h3 {
+      margin: 0 0 6px;
+      font-size: 1.55rem;
+      letter-spacing: -0.035em;
+    }
+
+    .settings p {
+      display: none;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      margin: 13px 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      outline: 0;
+      padding: 12px;
+      color: var(--ink);
+      background: #080808;
+    }
+
+    .settings-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .primary {
+      padding: 12px 16px;
+      border-radius: 14px;
+      color: #080808;
+      background: var(--accent);
+      font-weight: 700;
+    }
+
+    .mobile-menu {
+      display: none;
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 820px) {
+      body {
+        overflow: hidden;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+        padding: 10px;
+      }
+
+      .sidebar {
+        position: fixed;
+        inset: 10px auto 10px 10px;
+        z-index: 5;
+        width: min(320px, calc(100vw - 20px));
+        transform: translateX(calc(-100% - 16px));
+        transition: transform 190ms ease;
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .chat {
+        border-radius: 24px;
+      }
+
+      .mobile-menu {
+        display: inline-grid;
+        place-items: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 13px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .model-pill {
+        display: none;
+      }
+
+      .conversation-actions {
+        opacity: 1;
+      }
+
+      .message-actions {
+        opacity: 1;
+      }
+
+      .messages {
+        padding-inline: 14px;
+      }
+
+      .bubble {
+        max-width: 94%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar" id="sidebar">
+      <section class="brand">
+        <h1>Chat</h1>
+      </section>
+      <button class="new-chat" id="newChatBtn" aria-label="New chat">+</button>
+      <nav class="conversation-list" id="conversationList" aria-label="Saved chats"></nav>
+      <section class="sidebar-footer">
+        <button class="secondary" id="settingsBtn" aria-label="API settings">&#9881;</button>
+      </section>
+    </aside>
+
+    <section class="chat">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuBtn" aria-label="Open chats">&#9776;</button>
+        <h2 id="chatTitle">New chat</h2>
+        <span class="model-pill" id="modelPill">gpt-4.1-mini</span>
+      </header>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <footer class="composer-wrap">
+        <form class="composer" id="chatForm">
+          <textarea id="prompt" rows="1" placeholder="Message..." autocomplete="off"></textarea>
+          <button class="send" id="sendBtn" type="submit" aria-label="Send">&uarr;</button>
+        </form>
+      </footer>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form class="settings" id="settingsForm" method="dialog">
+      <h3>API settings</h3>
+      <label>
+        Base URL
+        <input id="baseUrl" type="url" placeholder="https://api.openai.com/v1" required>
+      </label>
+      <label>
+        API key
+        <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
+      </label>
+      <label>
+        Model
+        <input id="model" type="text" placeholder="gpt-4.1-mini" required>
+      </label>
+      <label>
+        Temperature
+        <input id="temperature" type="number" min="0" max="2" step="0.1" placeholder="0.7">
+      </label>
+      <div class="settings-actions">
+        <button class="secondary" id="cancelSettingsBtn" type="button">Cancel</button>
+        <button class="primary" type="submit">Save settings</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = "local-chatgpt-compatible-client:v1";
+    const DEFAULT_SETTINGS = {
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "",
+      model: "gpt-4.1-mini",
+      temperature: 0.7
+    };
+
+    const els = {
+      sidebar: document.querySelector("#sidebar"),
+      menuBtn: document.querySelector("#menuBtn"),
+      conversationList: document.querySelector("#conversationList"),
+      newChatBtn: document.querySelector("#newChatBtn"),
+      settingsBtn: document.querySelector("#settingsBtn"),
+      settingsDialog: document.querySelector("#settingsDialog"),
+      settingsForm: document.querySelector("#settingsForm"),
+      cancelSettingsBtn: document.querySelector("#cancelSettingsBtn"),
+      baseUrl: document.querySelector("#baseUrl"),
+      apiKey: document.querySelector("#apiKey"),
+      model: document.querySelector("#model"),
+      temperature: document.querySelector("#temperature"),
+      modelPill: document.querySelector("#modelPill"),
+      chatTitle: document.querySelector("#chatTitle"),
+      messages: document.querySelector("#messages"),
+      chatForm: document.querySelector("#chatForm"),
+      prompt: document.querySelector("#prompt"),
+      sendBtn: document.querySelector("#sendBtn")
+    };
+
+    let state = loadState();
+    let abortController = null;
+
+    function loadState() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (parsed && Array.isArray(parsed.conversations)) {
+          return {
+            settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
+            conversations: parsed.conversations,
+            currentId: parsed.currentId || null
+          };
+        }
+      } catch (error) {
+        console.warn("Could not load saved chats:", error);
+      }
+
+      const first = createConversation();
+      return {
+        settings: { ...DEFAULT_SETTINGS },
+        conversations: [first],
+        currentId: first.id
+      };
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function createConversation() {
+      const now = new Date().toISOString();
+      return {
+        id: createId(),
+        title: "New chat",
+        createdAt: now,
+        updatedAt: now,
+        messages: []
+      };
+    }
+
+    function createId() {
+      if (crypto.randomUUID) return crypto.randomUUID();
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+
+    function currentConversation() {
+      let conversation = state.conversations.find((item) => item.id === state.currentId);
+      if (!conversation) {
+        conversation = createConversation();
+        state.conversations.unshift(conversation);
+        state.currentId = conversation.id;
+        saveState();
+      }
+      return conversation;
+    }
+
+    function render() {
+      const conversation = currentConversation();
+      els.chatTitle.textContent = conversation.title;
+      els.modelPill.textContent = state.settings.model || "No model";
+      renderConversations();
+      renderMessages(conversation);
+      fillSettings();
+    }
+
+    function renderConversations() {
+      els.conversationList.innerHTML = "";
+      const sorted = [...state.conversations].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+
+      for (const conversation of sorted) {
+        const row = document.createElement("div");
+        row.className = `conversation${conversation.id === state.currentId ? " active" : ""}`;
+        row.innerHTML = `
+          <button class="conversation-main" type="button">
+            <span class="conversation-title"></span>
+            <span class="conversation-time"></span>
+          </button>
+          <span class="conversation-actions">
+            <button class="icon-btn rename-chat" type="button" aria-label="Rename chat">&#9998;</button>
+            <button class="icon-btn delete-chat" type="button" aria-label="Delete chat">&#10005;</button>
+          </span>
+        `;
+        row.querySelector(".conversation-title").textContent = conversation.title || "New chat";
+        row.querySelector(".conversation-time").textContent = formatTime(conversation.updatedAt);
+        row.querySelector(".conversation-main").addEventListener("click", () => {
+          state.currentId = conversation.id;
+          saveState();
+          els.sidebar.classList.remove("open");
+          render();
+        });
+        row.querySelector(".rename-chat").addEventListener("click", () => renameConversation(conversation.id));
+        row.querySelector(".delete-chat").addEventListener("click", () => deleteConversation(conversation.id));
+        els.conversationList.append(row);
+      }
+    }
+
+    function renderMessages(conversation) {
+      els.messages.innerHTML = "";
+
+      if (!conversation.messages.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        els.messages.append(empty);
+        return;
+      }
+
+      for (const [index, message] of conversation.messages.entries()) {
+        appendMessage(message.role, message.content, index);
+      }
+      scrollToBottom();
+    }
+
+    function appendMessage(role, content, index = null) {
+      const wrapper = document.createElement("article");
+      wrapper.className = `message ${role}`;
+      if (index !== null) wrapper.dataset.index = String(index);
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = content;
+      wrapper.append(bubble);
+
+      if (index !== null) {
+        const actions = document.createElement("div");
+        actions.className = "message-actions";
+        actions.innerHTML = `
+          <button class="message-action edit-message" type="button" aria-label="Edit message">&#9998;</button>
+          ${role === "assistant" ? '<button class="message-action regenerate-message" type="button" aria-label="Regenerate response">&#8635;</button>' : ""}
+        `;
+        actions.querySelector(".edit-message").addEventListener("click", () => editMessage(index));
+        const regenerateButton = actions.querySelector(".regenerate-message");
+        if (regenerateButton) regenerateButton.addEventListener("click", () => regenerateMessage(index));
+        wrapper.append(actions);
+      }
+
+      els.messages.append(wrapper);
+      scrollToBottom();
+      return bubble;
+    }
+
+    function fillSettings() {
+      els.baseUrl.value = state.settings.baseUrl;
+      els.apiKey.value = state.settings.apiKey;
+      els.model.value = state.settings.model;
+      els.temperature.value = state.settings.temperature;
+    }
+
+    function formatTime(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    }
+
+    function titleFromMessage(content) {
+      return content.trim().replace(/\s+/g, " ").slice(0, 44) || "New chat";
+    }
+
+    function renameConversation(id) {
+      const conversation = state.conversations.find((item) => item.id === id);
+      if (!conversation) return;
+      const title = prompt("Rename chat", conversation.title || "New chat");
+      if (title === null) return;
+      conversation.title = title.trim() || "New chat";
+      conversation.updatedAt = new Date().toISOString();
+      saveState();
+      render();
+    }
+
+    function deleteConversation(id) {
+      if (!confirm("Delete chat?")) return;
+      state.conversations = state.conversations.filter((item) => item.id !== id);
+      if (!state.conversations.length) state.conversations.push(createConversation());
+      if (state.currentId === id) state.currentId = state.conversations[0].id;
+      saveState();
+      render();
+    }
+
+    function editMessage(index) {
+      const conversation = currentConversation();
+      const message = conversation.messages[index];
+      if (!message || abortController) return;
+
+      const wrapper = els.messages.querySelector(`.message[data-index="${index}"]`);
+      if (!wrapper || wrapper.querySelector(".message-editor")) return;
+
+      const bubble = wrapper.querySelector(".bubble");
+      const actions = wrapper.querySelector(".message-actions");
+      const editor = document.createElement("form");
+      editor.className = "message-editor";
+      editor.innerHTML = `
+        <textarea aria-label="Edit message"></textarea>
+        <div class="edit-actions">
+          <button class="edit-save" type="submit">Save</button>
+          <button class="edit-cancel" type="button">Cancel</button>
+        </div>
+      `;
+
+      const textarea = editor.querySelector("textarea");
+      textarea.value = message.content;
+      bubble.replaceWith(editor);
+      if (actions) actions.style.display = "none";
+      resizeInlineEditor(textarea);
+      textarea.addEventListener("input", () => resizeInlineEditor(textarea));
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+      editor.addEventListener("submit", (event) => {
+        event.preventDefault();
+        message.content = textarea.value.trim();
+        conversation.updatedAt = new Date().toISOString();
+        if (index === 0 && message.role === "user") conversation.title = titleFromMessage(message.content);
+        saveState();
+        render();
+      });
+
+      editor.querySelector(".edit-cancel").addEventListener("click", () => render());
+    }
+
+    function resizeInlineEditor(textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight + 6, 180), 560)}px`;
+    }
+
+    async function regenerateMessage(index) {
+      const conversation = currentConversation();
+      const message = conversation.messages[index];
+      if (!message || message.role !== "assistant" || abortController) return;
+      if (!state.settings.apiKey) {
+        els.settingsDialog.showModal();
+        return;
+      }
+
+      const history = conversation.messages.slice(0, index).map(({ role, content }) => ({ role, content }));
+      if (!history.length) return;
+
+      message.content = "Thinking...";
+      conversation.updatedAt = new Date().toISOString();
+      saveState();
+      render();
+      setBusy(true);
+      const assistantBubble = els.messages.querySelector(`.message[data-index="${index}"] .bubble`);
+      if (assistantBubble) assistantBubble.textContent = "";
+
+      try {
+        const text = await requestAssistant(history, (delta, fullText) => {
+          if (!assistantBubble) return;
+          assistantBubble.textContent = fullText;
+          scrollToBottom();
+        });
+        message.content = text;
+        conversation.updatedAt = new Date().toISOString();
+        saveState();
+        render();
+      } catch (error) {
+        const detail = error.name === "AbortError" ? "Request cancelled." : `Error: ${error.message}`;
+        message.content = detail;
+        saveState();
+        render();
+      } finally {
+        abortController = null;
+        setBusy(false);
+      }
+    }
+
+    function normalizeBaseUrl(url) {
+      return url.trim().replace(/\/+$/, "");
+    }
+
+    function chatEndpoint() {
+      return `${normalizeBaseUrl(state.settings.baseUrl)}/chat/completions`;
+    }
+
+    async function requestAssistant(messages, onDelta = null) {
+      abortController = new AbortController();
+      const response = await fetch(chatEndpoint(), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${state.settings.apiKey}`
+        },
+        body: JSON.stringify({
+          model: state.settings.model,
+          messages,
+          temperature: Number(state.settings.temperature),
+          stream: true
+        }),
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        const detail = data.error?.message || `${response.status} ${response.statusText}`;
+        throw new Error(detail);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        const data = await response.json();
+        const text = data.choices?.[0]?.message?.content || "";
+        if (text && onDelta) onDelta(text, text);
+        if (!text) throw new Error("The API returned no assistant message.");
+        return text;
+      }
+
+      if (!response.body) throw new Error("This browser does not support streaming responses.");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let text = "";
+
+      function processStreamEvent(event) {
+        const payloads = event
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trim());
+
+        for (const payload of payloads) {
+          if (!payload || payload === "[DONE]") continue;
+
+          const data = JSON.parse(payload);
+          const delta = data.choices?.[0]?.delta?.content || "";
+          if (!delta) continue;
+          text += delta;
+          if (onDelta) onDelta(delta, text);
+        }
+      }
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split(/\r?\n\r?\n/);
+        buffer = events.pop() || "";
+
+        for (const event of events) {
+          processStreamEvent(event);
+        }
+      }
+
+      if (buffer.trim()) processStreamEvent(buffer);
+      if (!text) throw new Error("The API returned no assistant message.");
+      return text;
+    }
+
+    async function sendMessage(content) {
+      const conversation = currentConversation();
+      if (!content && !conversation.messages.length) return;
+      const wasEmpty = conversation.messages.length === 0;
+      const now = new Date().toISOString();
+
+      if (content) {
+        conversation.messages.push({ role: "user", content });
+        conversation.updatedAt = now;
+        if (wasEmpty) conversation.title = titleFromMessage(content);
+        saveState();
+        render();
+      }
+
+      const assistantBubble = appendMessage("assistant", "");
+      setBusy(true);
+
+      try {
+        const messages = conversation.messages.map(({ role, content }) => ({ role, content }));
+        const text = await requestAssistant(messages, (delta, fullText) => {
+          assistantBubble.textContent = fullText;
+          scrollToBottom();
+        });
+        conversation.messages.push({ role: "assistant", content: text });
+        conversation.updatedAt = new Date().toISOString();
+        saveState();
+        render();
+      } catch (error) {
+        const message = error.name === "AbortError" ? "Request cancelled." : `Error: ${error.message}`;
+        assistantBubble.textContent = message;
+      } finally {
+        abortController = null;
+        setBusy(false);
+      }
+    }
+
+    function setBusy(isBusy) {
+      els.prompt.disabled = isBusy;
+      els.sendBtn.disabled = false;
+      els.sendBtn.classList.toggle("cancel", isBusy);
+      els.sendBtn.textContent = isBusy ? "×" : "↑";
+      els.sendBtn.setAttribute("aria-label", isBusy ? "Cancel request" : "Send");
+    }
+
+    function scrollToBottom() {
+      requestAnimationFrame(() => {
+        els.messages.scrollTop = els.messages.scrollHeight;
+      });
+    }
+
+    function resizePrompt() {
+      els.prompt.style.height = "auto";
+      els.prompt.style.height = `${Math.min(els.prompt.scrollHeight, 180)}px`;
+    }
+
+    els.chatForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const content = els.prompt.value.trim();
+      if (abortController) {
+        abortController.abort();
+        return;
+      }
+      if (!content && !currentConversation().messages.length) return;
+      if (!state.settings.apiKey) {
+        els.settingsDialog.showModal();
+        return;
+      }
+      els.prompt.value = "";
+      resizePrompt();
+      sendMessage(content);
+    });
+
+    els.prompt.addEventListener("input", resizePrompt);
+    els.prompt.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        els.chatForm.requestSubmit();
+      }
+    });
+
+    els.newChatBtn.addEventListener("click", () => {
+      const conversation = createConversation();
+      state.conversations.unshift(conversation);
+      state.currentId = conversation.id;
+      saveState();
+      els.sidebar.classList.remove("open");
+      render();
+      els.prompt.focus();
+    });
+
+    els.settingsBtn.addEventListener("click", () => els.settingsDialog.showModal());
+    els.cancelSettingsBtn.addEventListener("click", () => els.settingsDialog.close());
+    els.menuBtn.addEventListener("click", () => els.sidebar.classList.toggle("open"));
+
+    els.settingsForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      state.settings = {
+        baseUrl: normalizeBaseUrl(els.baseUrl.value) || DEFAULT_SETTINGS.baseUrl,
+        apiKey: els.apiKey.value.trim(),
+        model: els.model.value.trim() || DEFAULT_SETTINGS.model,
+        temperature: els.temperature.value === "" ? DEFAULT_SETTINGS.temperature : Number(els.temperature.value)
+      };
+      saveState();
+      els.settingsDialog.close();
+      render();
+    });
+
+    window.addEventListener("beforeunload", () => {
+      if (abortController) abortController.abort();
+    });
+
+    render();
+  </script>
+</body>
+</html>
