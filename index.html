@@ -540,7 +540,8 @@
     }
 
     input,
-    select {
+    select,
+    .settings textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -548,6 +549,15 @@
       padding: 12px;
       color: var(--ink);
       background: #080808;
+    }
+
+    .settings textarea {
+      min-height: 150px;
+      max-height: 260px;
+      resize: vertical;
+      font-family: Consolas, "Liberation Mono", monospace;
+      font-size: 0.92rem;
+      line-height: 1.45;
     }
 
     .settings-actions {
@@ -683,8 +693,8 @@
         <input id="model" type="text" placeholder="gpt-4.1-mini" required>
       </label>
       <label>
-        Temperature
-        <input id="temperature" type="number" min="0" max="2" step="0.1" placeholder="1.0">
+        Parameters (YAML)
+        <textarea id="paramsYaml" rows="7" spellcheck="false" placeholder="temperature: 0.7&#10;max_tokens: 1000"></textarea>
       </label>
       <div class="settings-actions">
         <button class="secondary" id="cancelSettingsBtn" type="button">Cancel</button>
@@ -699,7 +709,7 @@
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
       model: "gpt-4.1-mini",
-      temperature: 0.7
+      paramsYaml: "temperature: 0.7"
     };
 
     const els = {
@@ -715,7 +725,7 @@
       baseUrl: document.querySelector("#baseUrl"),
       apiKey: document.querySelector("#apiKey"),
       model: document.querySelector("#model"),
-      temperature: document.querySelector("#temperature"),
+      paramsYaml: document.querySelector("#paramsYaml"),
       modelPill: document.querySelector("#modelPill"),
       chatTitleWrap: document.querySelector("#chatTitleWrap"),
       chatTitle: document.querySelector("#chatTitle"),
@@ -736,8 +746,12 @@
       try {
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (parsed && Array.isArray(parsed.conversations)) {
+          const settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
+          if (!("paramsYaml" in (parsed.settings || {})) && "temperature" in settings) {
+            settings.paramsYaml = `temperature: ${settings.temperature}`;
+          }
           return {
-            settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
+            settings,
             conversations: parsed.conversations,
             currentId: parsed.currentId || null
           };
@@ -965,7 +979,7 @@
       els.baseUrl.value = state.settings.baseUrl;
       els.apiKey.value = state.settings.apiKey;
       els.model.value = state.settings.model;
-      els.temperature.value = state.settings.temperature;
+      els.paramsYaml.value = state.settings.paramsYaml || "";
     }
 
     function formatTime(value) {
@@ -1132,8 +1146,135 @@
       return `${normalizeBaseUrl(state.settings.baseUrl)}/chat/completions`;
     }
 
+    function parseYamlParams(input) {
+      if (!input.trim()) return {};
+
+      const lines = input
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .map((raw, index) => {
+          if (raw.includes("\t")) throw new Error(`Line ${index + 1}: use spaces instead of tabs.`);
+          const withoutComment = raw.replace(/\s+#.*$/, "");
+          return {
+            line: index + 1,
+            indent: withoutComment.match(/^ */)[0].length,
+            text: withoutComment.trim()
+          };
+        })
+        .filter((line) => line.text);
+
+      if (!lines.length) return {};
+
+      function parseScalar(value) {
+        if (value === "true") return true;
+        if (value === "false") return false;
+        if (value === "null" || value === "~") return null;
+        if (/^-?(?:\d+|\d*\.\d+)(?:e[+-]?\d+)?$/i.test(value)) return Number(value);
+        if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+          return value.slice(1, -1);
+        }
+        if ((value.startsWith("[") && value.endsWith("]")) || (value.startsWith("{") && value.endsWith("}"))) {
+          return JSON.parse(value);
+        }
+        return value;
+      }
+
+      function parseBlock(startIndex, indent) {
+        const isArray = lines[startIndex]?.indent === indent && lines[startIndex].text.startsWith("- ");
+        const result = isArray ? [] : {};
+        let index = startIndex;
+
+        while (index < lines.length) {
+          const line = lines[index];
+          if (line.indent < indent) break;
+          if (line.indent > indent) throw new Error(`Line ${line.line}: unexpected indentation.`);
+
+          if (isArray) {
+            if (!line.text.startsWith("- ")) break;
+            const itemText = line.text.slice(2).trim();
+            if (!itemText) {
+              const next = lines[index + 1];
+              if (!next || next.indent <= indent) {
+                result.push(null);
+                index += 1;
+              } else {
+                const parsed = parseBlock(index + 1, next.indent);
+                result.push(parsed.value);
+                index = parsed.index;
+              }
+              continue;
+            }
+
+            const inlinePair = itemText.match(/^([^:]+):(?:\s*(.*))?$/);
+            if (inlinePair) {
+              const item = {};
+              const key = inlinePair[1].trim();
+              const value = (inlinePair[2] || "").trim();
+              const next = lines[index + 1];
+              if (!value && next && next.indent > indent) {
+                const parsed = parseBlock(index + 1, next.indent);
+                item[key] = parsed.value;
+                result.push(item);
+                index = parsed.index;
+                continue;
+              }
+              item[key] = value ? parseScalar(value) : null;
+              if (next && next.indent > indent) {
+                const parsed = parseBlock(index + 1, next.indent);
+                if (!Array.isArray(parsed.value) && parsed.value && typeof parsed.value === "object") {
+                  Object.assign(item, parsed.value);
+                  result.push(item);
+                  index = parsed.index;
+                  continue;
+                }
+              }
+              result.push(item);
+            } else {
+              result.push(parseScalar(itemText));
+            }
+            index += 1;
+            continue;
+          }
+
+          if (line.text.startsWith("- ")) break;
+          const match = line.text.match(/^([^:]+):(?:\s*(.*))?$/);
+          if (!match) throw new Error(`Line ${line.line}: expected "key: value".`);
+          const key = match[1].trim();
+          const value = (match[2] || "").trim();
+          if (!key) throw new Error(`Line ${line.line}: missing key.`);
+
+          if (value) {
+            result[key] = parseScalar(value);
+            index += 1;
+            continue;
+          }
+
+          const next = lines[index + 1];
+          if (!next || next.indent <= indent) {
+            result[key] = null;
+            index += 1;
+          } else {
+            const parsed = parseBlock(index + 1, next.indent);
+            result[key] = parsed.value;
+            index = parsed.index;
+          }
+        }
+
+        return { value: result, index };
+      }
+
+      if (lines[0].indent !== 0) throw new Error(`Line ${lines[0].line}: top-level parameters must not be indented.`);
+      const parsed = parseBlock(0, 0);
+      if (parsed.index < lines.length) throw new Error(`Line ${lines[parsed.index].line}: could not parse YAML.`);
+      if (Array.isArray(parsed.value) || !parsed.value || typeof parsed.value !== "object") {
+        throw new Error("Top-level YAML must be an object of request parameters.");
+      }
+      return parsed.value;
+    }
+
     async function requestAssistant(messages, onDelta = null) {
       abortController = new AbortController();
+      const params = parseYamlParams(state.settings.paramsYaml || "");
       const response = await fetch(chatEndpoint(), {
         method: "POST",
         headers: {
@@ -1141,10 +1282,10 @@
           "Authorization": `Bearer ${state.settings.apiKey}`
         },
         body: JSON.stringify({
+          ...params,
           model: state.settings.model,
           messages,
-          temperature: Number(state.settings.temperature),
-          stream: true
+          stream: params.stream ?? true
         }),
         signal: abortController.signal
       });
@@ -1310,11 +1451,19 @@
 
     els.settingsForm.addEventListener("submit", (event) => {
       event.preventDefault();
+      const paramsYaml = els.paramsYaml.value.trim();
+      try {
+        parseYamlParams(paramsYaml);
+      } catch (error) {
+        alert(`Parameter YAML error: ${error.message}`);
+        els.paramsYaml.focus();
+        return;
+      }
       state.settings = {
         baseUrl: normalizeBaseUrl(els.baseUrl.value) || DEFAULT_SETTINGS.baseUrl,
         apiKey: els.apiKey.value.trim(),
         model: els.model.value.trim() || DEFAULT_SETTINGS.model,
-        temperature: els.temperature.value === "" ? DEFAULT_SETTINGS.temperature : Number(els.temperature.value)
+        paramsYaml
       };
       saveState();
       els.settingsDialog.close();
