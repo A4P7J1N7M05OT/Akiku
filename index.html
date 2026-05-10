@@ -52,7 +52,7 @@
 
     .app {
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       height: 100%;
       padding: 18px;
       gap: 18px;
@@ -68,10 +68,20 @@
     }
 
     .sidebar {
+      position: fixed;
+      inset: 18px auto 18px 18px;
+      z-index: 5;
+      width: min(320px, calc(100vw - 36px));
       display: flex;
       flex-direction: column;
       border-radius: var(--radius);
       overflow: hidden;
+      transform: translateX(calc(-100% - 24px));
+      transition: transform 190ms ease;
+    }
+
+    .sidebar.open {
+      transform: translateX(0);
     }
 
     .brand {
@@ -129,8 +139,14 @@
     }
 
     .conversation:hover,
-    .conversation.active {
+    .conversation.active,
+    .conversation.editing,
+    .conversation.confirming {
       background: rgba(255, 255, 255, 0.06);
+    }
+
+    .conversation.editing {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     .conversation-main {
@@ -165,8 +181,38 @@
     }
 
     .conversation:hover .conversation-actions,
-    .conversation.active .conversation-actions {
+    .conversation.active .conversation-actions,
+    .conversation.editing .conversation-actions,
+    .conversation.confirming .conversation-actions {
       opacity: 1;
+    }
+
+    .conversation-rename-form {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .conversation-title-input,
+    .title-rename-input {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      outline: 0;
+      padding: 9px 10px;
+      color: var(--ink);
+      background: #080808;
+      font-weight: 700;
+    }
+
+    .conversation-confirm {
+      min-width: 0;
+      padding: 9px 8px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 700;
     }
 
     .icon-btn {
@@ -227,13 +273,43 @@
       gap: 12px;
     }
 
-    .topbar h2 {
+    .chat-title-wrap {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chat-title-wrap h2 {
+      flex: 0 1 auto;
+      min-width: 0;
       margin: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 1.25rem;
       letter-spacing: -0.025em;
+    }
+
+    .chat-title-wrap .icon-btn {
+      flex: 0 0 auto;
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+
+    .topbar:hover .chat-title-wrap .icon-btn,
+    .chat-title-wrap:focus-within .icon-btn {
+      opacity: 1;
+    }
+
+    .title-rename-form {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
     }
 
     .model-pill {
@@ -490,7 +566,14 @@
     }
 
     .mobile-menu {
-      display: none;
+      display: inline-grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 13px;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.18);
     }
 
     @keyframes rise {
@@ -516,33 +599,20 @@
       }
 
       .sidebar {
-        position: fixed;
         inset: 10px auto 10px 10px;
-        z-index: 5;
         width: min(320px, calc(100vw - 20px));
-        transform: translateX(calc(-100% - 16px));
-        transition: transform 190ms ease;
-      }
-
-      .sidebar.open {
-        transform: translateX(0);
       }
 
       .chat {
         border-radius: 24px;
       }
 
-      .mobile-menu {
-        display: inline-grid;
-        place-items: center;
-        width: 40px;
-        height: 40px;
-        border-radius: 13px;
-        background: rgba(255, 255, 255, 0.08);
-      }
-
       .model-pill {
         display: none;
+      }
+
+      .chat-title-wrap .icon-btn {
+        opacity: 1;
       }
 
       .conversation-actions {
@@ -579,7 +649,10 @@
     <section class="chat">
       <header class="topbar">
         <button class="mobile-menu" id="menuBtn" aria-label="Open chats">&#9776;</button>
-        <h2 id="chatTitle">New chat</h2>
+        <div class="chat-title-wrap" id="chatTitleWrap">
+          <h2 id="chatTitle">New chat</h2>
+          <button class="icon-btn" id="renameCurrentBtn" type="button" aria-label="Rename current chat">&#9998;</button>
+        </div>
         <span class="model-pill" id="modelPill">gpt-4.1-mini</span>
       </header>
 
@@ -611,7 +684,7 @@
       </label>
       <label>
         Temperature
-        <input id="temperature" type="number" min="0" max="2" step="0.1" placeholder="0.7">
+        <input id="temperature" type="number" min="0" max="2" step="0.1" placeholder="1.0">
       </label>
       <div class="settings-actions">
         <button class="secondary" id="cancelSettingsBtn" type="button">Cancel</button>
@@ -631,6 +704,7 @@
 
     const els = {
       sidebar: document.querySelector("#sidebar"),
+      chat: document.querySelector(".chat"),
       menuBtn: document.querySelector("#menuBtn"),
       conversationList: document.querySelector("#conversationList"),
       newChatBtn: document.querySelector("#newChatBtn"),
@@ -643,7 +717,9 @@
       model: document.querySelector("#model"),
       temperature: document.querySelector("#temperature"),
       modelPill: document.querySelector("#modelPill"),
+      chatTitleWrap: document.querySelector("#chatTitleWrap"),
       chatTitle: document.querySelector("#chatTitle"),
+      renameCurrentBtn: document.querySelector("#renameCurrentBtn"),
       messages: document.querySelector("#messages"),
       chatForm: document.querySelector("#chatForm"),
       prompt: document.querySelector("#prompt"),
@@ -652,6 +728,9 @@
 
     let state = loadState();
     let abortController = null;
+    let renamingConversationId = null;
+    let renamingSurface = null;
+    let pendingDeleteId = null;
 
     function loadState() {
       try {
@@ -710,11 +789,51 @@
 
     function render() {
       const conversation = currentConversation();
-      els.chatTitle.textContent = conversation.title;
+      renderChatTitle(conversation);
       els.modelPill.textContent = state.settings.model || "No model";
       renderConversations();
       renderMessages(conversation);
       fillSettings();
+    }
+
+    function renderChatTitle(conversation) {
+      if (renamingConversationId === conversation.id && renamingSurface === "title") {
+        els.chatTitleWrap.innerHTML = `
+          <form class="title-rename-form">
+            <input class="title-rename-input" aria-label="Rename current chat">
+            <button class="icon-btn" type="submit" aria-label="Save chat name">&#10003;</button>
+            <button class="icon-btn title-rename-cancel" type="button" aria-label="Cancel rename">&#10005;</button>
+          </form>
+        `;
+        const form = els.chatTitleWrap.querySelector(".title-rename-form");
+        const input = form.querySelector(".title-rename-input");
+        input.value = conversation.title || "New chat";
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          commitConversationRename(conversation.id, input.value);
+        });
+        form.querySelector(".title-rename-cancel").addEventListener("click", cancelInlineActions);
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelInlineActions();
+          }
+        });
+        requestAnimationFrame(() => {
+          input.focus();
+          input.select();
+        });
+        return;
+      }
+
+      els.chatTitleWrap.innerHTML = `
+        <h2 id="chatTitle"></h2>
+        <button class="icon-btn" id="renameCurrentBtn" type="button" aria-label="Rename current chat">&#9998;</button>
+      `;
+      els.chatTitle = els.chatTitleWrap.querySelector("#chatTitle");
+      els.renameCurrentBtn = els.chatTitleWrap.querySelector("#renameCurrentBtn");
+      els.chatTitle.textContent = conversation.title || "New chat";
+      els.renameCurrentBtn.addEventListener("click", () => startConversationRename(conversation.id, "title"));
     }
 
     function renderConversations() {
@@ -724,6 +843,54 @@
       for (const conversation of sorted) {
         const row = document.createElement("div");
         row.className = `conversation${conversation.id === state.currentId ? " active" : ""}`;
+        row.dataset.id = conversation.id;
+
+        if (renamingConversationId === conversation.id && renamingSurface === "sidebar") {
+          row.classList.add("editing");
+          row.innerHTML = `
+            <form class="conversation-rename-form">
+              <input class="conversation-title-input" aria-label="Rename chat">
+              <button class="icon-btn" type="submit" aria-label="Save chat name">&#10003;</button>
+              <button class="icon-btn rename-cancel" type="button" aria-label="Cancel rename">&#10005;</button>
+            </form>
+          `;
+          const form = row.querySelector(".conversation-rename-form");
+          const input = form.querySelector(".conversation-title-input");
+          input.value = conversation.title || "New chat";
+          form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            commitConversationRename(conversation.id, input.value);
+          });
+          form.querySelector(".rename-cancel").addEventListener("click", cancelInlineActions);
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelInlineActions();
+            }
+          });
+          els.conversationList.append(row);
+          requestAnimationFrame(() => {
+            input.focus();
+            input.select();
+          });
+          continue;
+        }
+
+        if (pendingDeleteId === conversation.id) {
+          row.classList.add("confirming");
+          row.innerHTML = `
+            <span class="conversation-confirm">Delete this chat?</span>
+            <span class="conversation-actions">
+              <button class="icon-btn delete-confirm" type="button" aria-label="Confirm delete">&#10003;</button>
+              <button class="icon-btn delete-cancel" type="button" aria-label="Cancel delete">&#10005;</button>
+            </span>
+          `;
+          row.querySelector(".delete-confirm").addEventListener("click", () => commitConversationDelete(conversation.id));
+          row.querySelector(".delete-cancel").addEventListener("click", cancelInlineActions);
+          els.conversationList.append(row);
+          continue;
+        }
+
         row.innerHTML = `
           <button class="conversation-main" type="button">
             <span class="conversation-title"></span>
@@ -738,12 +905,15 @@
         row.querySelector(".conversation-time").textContent = formatTime(conversation.updatedAt);
         row.querySelector(".conversation-main").addEventListener("click", () => {
           state.currentId = conversation.id;
+          renamingConversationId = null;
+          renamingSurface = null;
+          pendingDeleteId = null;
           saveState();
           els.sidebar.classList.remove("open");
           render();
         });
-        row.querySelector(".rename-chat").addEventListener("click", () => renameConversation(conversation.id));
-        row.querySelector(".delete-chat").addEventListener("click", () => deleteConversation(conversation.id));
+        row.querySelector(".rename-chat").addEventListener("click", () => startConversationRename(conversation.id, "sidebar"));
+        row.querySelector(".delete-chat").addEventListener("click", () => startConversationDelete(conversation.id));
         els.conversationList.append(row);
       }
     }
@@ -808,22 +978,50 @@
       return content.trim().replace(/\s+/g, " ").slice(0, 44) || "New chat";
     }
 
-    function renameConversation(id) {
+    function startConversationRename(id, surface = "sidebar") {
       const conversation = state.conversations.find((item) => item.id === id);
       if (!conversation) return;
-      const title = prompt("Rename chat", conversation.title || "New chat");
-      if (title === null) return;
-      conversation.title = title.trim() || "New chat";
+      renamingConversationId = id;
+      renamingSurface = surface;
+      pendingDeleteId = null;
+      render();
+    }
+
+    function commitConversationRename(id, value) {
+      const conversation = state.conversations.find((item) => item.id === id);
+      if (!conversation) return;
+      const title = value.trim();
+      conversation.title = title || "New chat";
       conversation.updatedAt = new Date().toISOString();
+      renamingConversationId = null;
+      renamingSurface = null;
+      pendingDeleteId = null;
       saveState();
       render();
     }
 
-    function deleteConversation(id) {
-      if (!confirm("Delete chat?")) return;
+    function startConversationDelete(id) {
+      if (!state.conversations.some((item) => item.id === id)) return;
+      pendingDeleteId = id;
+      renamingConversationId = null;
+      renamingSurface = null;
+      render();
+    }
+
+    function cancelInlineActions() {
+      renamingConversationId = null;
+      renamingSurface = null;
+      pendingDeleteId = null;
+      render();
+    }
+
+    function commitConversationDelete(id) {
       state.conversations = state.conversations.filter((item) => item.id !== id);
       if (!state.conversations.length) state.conversations.push(createConversation());
       if (state.currentId === id) state.currentId = state.conversations[0].id;
+      renamingConversationId = null;
+      renamingSurface = null;
+      pendingDeleteId = null;
       saveState();
       render();
     }
@@ -854,12 +1052,23 @@
       if (actions) actions.style.display = "none";
       resizeInlineEditor(textarea);
       textarea.addEventListener("input", () => resizeInlineEditor(textarea));
+      textarea.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          render();
+        }
+      });
       textarea.focus();
       textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
       editor.addEventListener("submit", (event) => {
         event.preventDefault();
-        message.content = textarea.value.trim();
+        const content = textarea.value.trim();
+        if (!content) {
+          render();
+          return;
+        }
+        message.content = content;
         conversation.updatedAt = new Date().toISOString();
         if (index === 0 && message.role === "user") conversation.title = titleFromMessage(message.content);
         saveState();
@@ -1089,7 +1298,15 @@
 
     els.settingsBtn.addEventListener("click", () => els.settingsDialog.showModal());
     els.cancelSettingsBtn.addEventListener("click", () => els.settingsDialog.close());
-    els.menuBtn.addEventListener("click", () => els.sidebar.classList.toggle("open"));
+    els.menuBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      els.sidebar.classList.toggle("open");
+    });
+
+    els.chat.addEventListener("click", (event) => {
+      if (event.target.closest("#menuBtn")) return;
+      if (els.sidebar.classList.contains("open")) els.sidebar.classList.remove("open");
+    });
 
     els.settingsForm.addEventListener("submit", (event) => {
       event.preventDefault();
