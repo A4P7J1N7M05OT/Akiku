@@ -742,6 +742,27 @@
     let renamingSurface = null;
     let pendingDeleteId = null;
 
+    function ensureDefaultParams(paramsYaml, defaults) {
+      const value = (paramsYaml || "").trim();
+      if (!value) return DEFAULT_SETTINGS.paramsYaml;
+
+      const seen = new Set();
+      const lines = value.split(/\r?\n/).filter((line) => {
+        const match = line.match(/^([A-Za-z_][\w-]*)\s*:/);
+        if (!match) return true;
+        const key = match[1];
+        if (!(key in defaults)) return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      for (const [key, defaultValue] of Object.entries(defaults)) {
+        if (!seen.has(key)) lines.push(`${key}: ${defaultValue}`);
+      }
+      return lines.join("\n");
+    }
+
     function loadState() {
       try {
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -749,8 +770,8 @@
           const settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
           if (!("paramsYaml" in (parsed.settings || {})) && "temperature" in settings) {
             settings.paramsYaml = `temperature: ${settings.temperature}\ntop_p: 0.95`;
-          } else if (!/^\s*top_p\s:/m.test(settings.paramsYaml || "")) {
-            settings.paramsYaml = `${settings.paramsYaml || DEFAULT_SETTINGS.paramsYaml}\ntop_p: 0.95`;
+          } else {
+            settings.paramsYaml = ensureDefaultParams(settings.paramsYaml, { top_p: 0.95 });
           }
           return {
             settings,
