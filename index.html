@@ -694,7 +694,7 @@
       </label>
       <label>
         Parameters (YAML)
-        <textarea id="paramsYaml" rows="7" spellcheck="false" placeholder="temperature: 1.0&#10;top_p: 0.95&#10;max_tokens: 1000"></textarea>
+        <textarea id="paramsYaml" rows="7" spellcheck="false" placeholder="temperature: 1.0&#10;max_tokens: 1000"></textarea>
       </label>
       <div class="settings-actions">
         <button class="secondary" id="cancelSettingsBtn" type="button">Cancel</button>
@@ -709,7 +709,7 @@
       baseUrl: "https://api.openai.com/v1",
       apiKey: "",
       model: "gpt-4.1-mini",
-      paramsYaml: "temperature: 1.0\ntop_p: 0.95"
+      paramsYaml: "temperature: 1.0"
     };
 
     const els = {
@@ -742,36 +742,13 @@
     let renamingSurface = null;
     let pendingDeleteId = null;
 
-    function ensureDefaultParams(paramsYaml, defaults) {
-      const value = (paramsYaml || "").trim();
-      if (!value) return DEFAULT_SETTINGS.paramsYaml;
-
-      const seen = new Set();
-      const lines = value.split(/\r?\n/).filter((line) => {
-        const match = line.match(/^([A-Za-z_][\w-]*)\s*:/);
-        if (!match) return true;
-        const key = match[1];
-        if (!(key in defaults)) return true;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      for (const [key, defaultValue] of Object.entries(defaults)) {
-        if (!seen.has(key)) lines.push(`${key}: ${defaultValue}`);
-      }
-      return lines.join("\n");
-    }
-
     function loadState() {
       try {
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (parsed && Array.isArray(parsed.conversations)) {
           const settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
           if (!("paramsYaml" in (parsed.settings || {})) && "temperature" in settings) {
-            settings.paramsYaml = `temperature: ${settings.temperature}\ntop_p: 0.95`;
-          } else {
-            settings.paramsYaml = ensureDefaultParams(settings.paramsYaml, { top_p: 0.95 });
+            settings.paramsYaml = `temperature: ${settings.temperature}`;
           }
           return {
             settings,
