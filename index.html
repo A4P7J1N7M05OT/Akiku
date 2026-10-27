@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Local Chat</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --bg: #030303;
@@ -33,7 +34,9 @@
 
     body {
       color: var(--ink);
-      font-family: Georgia, "Iowan Old Style", "Palatino Linotype", serif;
+      font-family: "Trebuchet MS", "Avenir Next", Avenir, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.5;
       background: #000;
       overflow: hidden;
     }
@@ -914,7 +917,8 @@
       border-radius: 0;
       background: transparent;
       color: #e0e0e0;
-      line-height: 1.75;
+      font-size: 1rem;
+      line-height: 1.7;
     }
     .dialogue { color: #ffffff; font-weight: 700; }
     .message-actions, .variant-nav { grid-column: 2; }
@@ -936,25 +940,78 @@
       .message-avatar { width: 36px; height: 36px; border-radius: 9px; font-size: .95rem; }
       .composer-wrap { padding: 10px 12px 14px; }
     }
+
+    :root { --line: rgba(255,255,255,.16); --panel: #101010; --panel-solid: #151515; }
+    .chat { position: relative; }
+    .messages { scroll-behavior: auto; }
+    .sidebar { background: var(--panel); }
+    .new-chat { font-size: 1rem; }
+    .sidebar-footer { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sidebar-footer .secondary { font-size: .85rem; }
+    .sidebar-footer #promptOrderBtn, .sidebar-footer #chatDataBtn { border-top: 1px solid var(--line); }
+    .conversation:focus-within .conversation-actions { opacity: 1; }
+    .message { border-bottom-color: rgba(255,255,255,.1); }
+    .composer { background: #101010; }
+    .composer:focus-within { border-color: rgba(255,255,255,.55); }
+    .composer-info { max-width: 980px; margin: 9px auto 0; display: flex; justify-content: space-between; gap: 12px; color: #aaa; font: .75rem/1.5 system-ui, sans-serif; flex-wrap: wrap; }
+    .empty { display: grid; align-content: center; justify-items: center; min-height: 100%; text-align: center; padding: 24px 0; }
+    .empty h2 { margin: 0 0 12px; font-size: clamp(1.5rem, 4vw, 2rem); }
+    .empty p { color: var(--muted); max-width: 380px; line-height: 1.6; margin: 0 0 24px; }
+    .empty-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .search-empty { color: var(--muted); padding: 16px 8px; text-align: center; }
+    .jump-latest { position: absolute; bottom: 170px; left: 50%; transform: translateX(-50%); z-index: 2; background: #242424; border: 1px solid var(--line); box-shadow: 0 4px 18px #0008; }
+    [hidden] { display: none !important; }
+    .feedback { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; margin-top: 12px; border: 1px solid var(--line); border-radius: 12px; background: #252525; font: .9rem/1.5 system-ui, sans-serif; }
+    .chat > .feedback { position: absolute; top: 75px; left: 16px; right: 16px; z-index: 3; }
+    .feedback .icon-btn { flex-shrink: 0; }
+    dialog { max-height: calc(100dvh - 28px); overflow-y: auto; }
+    .app { height: 100dvh; }
+    .pb-header { flex-wrap: wrap; }
+    .pb-label { flex-basis: 90px; }
+    .pb-role:focus-visible, .pb-label:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    @media (min-width: 1200px) {
+      .app { width: min(1480px, 100%); grid-template-columns: 280px minmax(0, 1fr); }
+      .sidebar { position: static; width: auto; transform: none; }
+      .mobile-menu { display: none; }
+    }
+    @media (pointer: coarse) {
+      .icon-btn, .message-action, .pb-icon-btn, .tool-btn, .favorite-btn, .variant-nav button { min-width: 44px; min-height: 44px; }
+      .message-actions { flex-wrap: wrap; opacity: 1; }
+      .conversation-actions { opacity: 1; }
+      .pb-toggle { min-width: 44px; min-height: 28px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    }
+    .card-row { grid-template-columns: minmax(0, 1fr); }
+    .card-row > div:first-child { overflow-wrap: anywhere; }
+    .card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .character-editor-actions { flex-wrap: wrap; }
+    #characterEditorFields textarea { min-height: 100px; font-family: inherit; }
+    #characterEditorDialog summary { cursor: pointer; padding-block: 12px; }
+    .oauth-login-group { margin: 13px 0; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #080808; display: grid; gap: 10px; }
+    .oauth-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    #vertexOAuthStatus { margin: 0; }
   </style>
 </head>
 <body>
   <main class="app">
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" inert aria-label="Chat navigation">
       <section class="brand">
         <h1>Chat</h1>
       </section>
-      <button class="new-chat" id="newChatBtn" aria-label="New chat">+</button>
+      <button class="new-chat" id="newChatBtn" aria-label="New chat">+ New chat</button>
       <div class="toolbar">
-        <input id="chatSearch" type="search" placeholder="Search or #tag">
-        <button class="tool-btn" id="favoritesFilterBtn" type="button" title="Favorites only">&#9734;</button>
+        <input id="chatSearch" aria-label="Search chats by title or tag" type="search" placeholder="Search or #tag">
+        <button class="tool-btn" id="favoritesFilterBtn" aria-label="Show favorites only" aria-pressed="false" type="button" title="Favorites only">&#9734;</button>
       </div>
       <nav class="conversation-list" id="conversationList" aria-label="Saved chats"></nav>
       <section class="sidebar-footer">
         <button class="secondary" id="charactersBtn">Characters</button>
-        <button class="secondary" id="userBtn">User</button>
-        <button class="secondary" id="chatDataBtn">Import / export</button>
+        <button class="secondary" id="userBtn">Your persona</button>
         <button class="secondary" id="promptOrderBtn" aria-label="Prompt order">Prompts</button>
+        <button class="secondary" id="chatDataBtn">Import / export</button>
         <button class="secondary" id="requestPreviewBtn">Request preview</button>
         <button class="secondary" id="settingsBtn" aria-label="API settings">Settings</button>
       </section>
@@ -962,22 +1019,24 @@
 
     <section class="chat">
       <header class="topbar">
-        <button class="mobile-menu" id="menuBtn" aria-label="Open chats">&#9776;</button>
+        <button class="mobile-menu" id="menuBtn" aria-label="Open chats" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
         <div class="chat-title-wrap" id="chatTitleWrap">
           <h2 id="chatTitle">New chat</h2>
           <button class="icon-btn" id="renameCurrentBtn" type="button" aria-label="Rename current chat">&#9998;</button>
         </div>
-        <div class="top-actions"><button class="favorite-btn" id="favoriteBtn" type="button" title="Favorite chat">&#9734;</button><span class="model-pill" id="modelPill">gpt-4.1-mini</span></div>
+        <div class="top-actions"><button class="favorite-btn" id="favoriteBtn" aria-label="Favorite chat" aria-pressed="false" type="button" title="Favorite chat">&#9734;</button><span class="model-pill" id="modelPill">gpt-4.1-mini</span></div>
       </header>
 
-      <section class="messages" id="messages" aria-live="polite"></section>
+      <section class="messages" id="messages" aria-label="Conversation" tabindex="0"></section>
+      <button class="jump-latest secondary" id="jumpLatest" type="button" hidden>Jump to latest &#8595;</button>
 
       <footer class="composer-wrap">
         <div class="chat-meta" id="chatMeta"></div>
         <form class="composer" id="chatForm">
-          <textarea id="prompt" rows="1" placeholder="Message..." autocomplete="off"></textarea>
+          <textarea aria-label="Message" aria-describedby="composerHint" id="prompt" rows="1" placeholder="Message..." autocomplete="off"></textarea>
           <button class="send" id="sendBtn" type="submit" aria-label="Send">&uarr;</button>
         </form>
+        <div class="composer-info"><span id="composerHint">Enter to send &middot; Shift+Enter for a new line</span><span id="generationStatus" role="status"></span></div>
       </footer>
     </section>
   </main>
@@ -1010,19 +1069,26 @@
       <h3>API settings</h3>
       <label>
         Provider
-        <select id="provider"><option value="openai">OpenAI compatible</option><option value="vertex">Vertex AI Express (API key)</option><option value="vertex-oauth">Vertex AI (OAuth access token)</option></select>
+        <select id="provider"><option value="openai">OpenAI compatible</option><option value="vertex">Vertex AI (Google OAuth)</option></select>
       </label>
       <button class="secondary" id="vertexPresetBtn" type="button">Load Vertex AI example</button>
       <div id="vertexOAuthFields" hidden>
         <label>Google Cloud project ID<input id="vertexProject" type="text" placeholder="my-project"></label>
         <label>Location<input id="vertexLocation" type="text" placeholder="global"></label>
-        <div class="po-desc">Paste the output of <code>gcloud auth print-access-token</code> into the credential field. Refresh it when it expires.</div>
+        <label>Google OAuth Client ID<input id="vertexClientId" type="text" placeholder="123456789-abc.apps.googleusercontent.com" autocomplete="off"></label>
+        <div class="oauth-login-group">
+          <div class="oauth-actions">
+            <button class="primary" id="vertexOAuthBtn" type="button">Sign in with Google OAuth</button>
+            <button class="secondary" id="vertexSignOutBtn" type="button" hidden>Sign out</button>
+          </div>
+          <div class="po-desc" id="vertexOAuthStatus" role="status">Not signed in.</div>
+        </div>
       </div>
-      <label>
+      <label id="baseUrlField">
         Base URL
         <input id="baseUrl" type="url" placeholder="https://api.openai.com/v1" required>
       </label>
-      <label>
+      <label id="apiKeyField">
         <span id="credentialLabel">API key</span>
         <input id="apiKey" type="password" placeholder="sk-..." autocomplete="off">
       </label>
@@ -1056,11 +1122,28 @@
 
   <dialog id="charactersDialog">
     <div class="settings"><div class="po-dialog-header"><h3>Character cards</h3><button class="icon-btn dialog-close" type="button">&#10005;</button></div>
-      <div class="po-desc">Import Character Card V2 JSON or PNG cards. Select the active card in Prompt order.</div>
+      <div class="po-desc">Import Character Card V2 JSON or PNG cards, edit their details, and export them as JSON.</div>
       <div class="card-grid" id="characterList"></div>
       <div class="settings-actions"><button class="secondary" id="importCharacterBtn" type="button">Import card</button></div>
       <input class="hidden-input" id="characterFile" type="file" accept=".json,.png,application/json,image/png">
     </div>
+  </dialog>
+
+  <dialog id="characterEditorDialog">
+    <form class="settings" id="characterEditorForm">
+      <h3>Edit character card</h3>
+      <div class="po-desc">Changes apply to chats using this character. Export downloads a Character Card V2 JSON file.</div>
+      <div id="characterEditorFields"></div>
+      <details><summary>Additional card data</summary>
+        <label>Additional fields (JSON object)<textarea id="characterExtraData" rows="8" spellcheck="false" aria-describedby="characterExtraHint"></textarea></label>
+        <div class="po-desc" id="characterExtraHint">Preserves other fields such as alternate_greetings, tags, extensions, and character_book. Edit these here when needed.</div>
+      </details>
+      <div class="settings-actions character-editor-actions">
+        <button class="secondary dialog-close" type="button">Cancel</button>
+        <button class="secondary" type="submit" name="action" value="save">Save changes</button>
+        <button class="primary" type="submit" name="action" value="export">Save and export</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="chatDataDialog">
@@ -1081,10 +1164,14 @@
 
   <script>
     const STORAGE_KEY = "local-chatgpt-compatible-client:v1";
+    const VERTEX_OAUTH_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
     const DEFAULT_SETTINGS = {
       provider: "openai",
       vertexProject: "",
       vertexLocation: "global",
+      vertexClientId: "",
+      vertexAccessToken: "",
+      vertexTokenExpiry: 0,
       userName: "User",
       userDescription: "",
       baseUrl: "https://api.openai.com/v1",
@@ -1156,6 +1243,8 @@
 
     let state = loadState();
     let abortController = null;
+    let followLatest = true;
+    let renderedConversationId = null;
     let renamingConversationId = null;
     let renamingSurface = null;
     let pendingDeleteId = null;
@@ -1168,6 +1257,13 @@
         const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
         if (parsed && Array.isArray(parsed.conversations)) {
           const settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
+          if (settings.provider === "vertex-oauth") {
+            settings.provider = "vertex";
+            if (!settings.vertexAccessToken && settings.apiKey) {
+              settings.vertexAccessToken = settings.apiKey;
+              settings.apiKey = "";
+            }
+          }
           if (!("paramsYaml" in (parsed.settings || {})) && "temperature" in settings) {
             settings.paramsYaml = `temperature: ${settings.temperature}`;
           }
@@ -1245,12 +1341,14 @@
 
     function render() {
       const conversation = currentConversation();
+      if (renderedConversationId !== conversation.id) { followLatest = true; renderedConversationId = conversation.id; }
       renderChatTitle(conversation);
       els.modelPill.textContent = state.settings.model || "No model";
       renderConversations();
       renderMessages(conversation);
       renderChatMeta(conversation);
       els.favoriteBtn.classList.toggle("on", conversation.favorite);
+      els.favoriteBtn.setAttribute("aria-pressed", String(!!conversation.favorite));
       els.favoriteBtn.innerHTML = conversation.favorite ? "&#9733;" : "&#9734;";
       fillSettings();
     }
@@ -1303,6 +1401,18 @@
         .filter(c => !query || (query.startsWith("#") ? c.tags.some(t => t.toLowerCase().includes(query.slice(1))) : `${c.title} ${c.tags.join(" ")}`.toLowerCase().includes(query)))
         .sort((a, b) => (Number(b.favorite) - Number(a.favorite)) || (new Date(b.updatedAt) - new Date(a.updatedAt)));
 
+      if (!sorted.length) {
+        const empty = document.createElement("div");
+        empty.className = "search-empty";
+        empty.innerHTML = '<p>No matching chats.</p><button type="button" class="secondary">Clear filters</button>';
+        empty.querySelector("button").addEventListener("click", () => {
+          els.chatSearch.value = ""; favoritesOnly = false;
+          els.favoritesFilterBtn.classList.remove("on");
+          els.favoritesFilterBtn.setAttribute("aria-pressed", "false");
+          els.favoritesFilterBtn.innerHTML = "&#9734;"; renderConversations(); els.chatSearch.focus();
+        });
+        els.conversationList.append(empty);
+      }
       for (const conversation of sorted) {
         const row = document.createElement("div");
         row.className = `conversation${conversation.id === state.currentId ? " active" : ""}`;
@@ -1372,7 +1482,7 @@
           renamingSurface = null;
           pendingDeleteId = null;
           saveState();
-          els.sidebar.classList.remove("open");
+          setSidebar(false);
           render();
         });
         row.querySelector(".rename-chat").addEventListener("click", () => startConversationRename(conversation.id, "sidebar"));
@@ -1405,11 +1515,17 @@
     }
 
     function renderMessages(conversation) {
+      const previousScroll = els.messages.scrollTop;
       els.messages.innerHTML = "";
 
       if (!conversation.messages.length) {
         const empty = document.createElement("div");
         empty.className = "empty";
+        const ready = isApiConfigured();
+        empty.innerHTML = `<h2>Start a conversation</h2><p>${ready ? "Send a message or choose a character to begin." : "Connect your API to start chatting, or choose a character first."}</p><div class="empty-actions"><button type="button" class="primary">${ready ? "Write a message" : "Configure API"}</button><button type="button" class="secondary">Choose a character</button></div>`;
+        empty.querySelector(".primary").addEventListener("click", () => ready ? els.prompt.focus() : els.settingsDialog.showModal());
+        empty.querySelector(".secondary").addEventListener("click", () => { renderCharacters(); els.charactersDialog.showModal(); });
+        document.querySelector("#jumpLatest").hidden = true;
         els.messages.append(empty);
         return;
       }
@@ -1417,6 +1533,7 @@
       for (const [index, message] of conversation.messages.entries()) {
         appendMessage(message.role, message.content, index, message);
       }
+      if (!followLatest) els.messages.scrollTop = previousScroll;
       scrollToBottom();
     }
 
@@ -1482,6 +1599,7 @@
         }
       }
 
+      els.messages.querySelector(".empty")?.remove();
       els.messages.append(wrapper);
       scrollToBottom();
       return bubble;
@@ -1557,9 +1675,10 @@
     }
 
     function fillSettings() {
-      document.querySelector("#provider").value = state.settings.provider;
+      document.querySelector("#provider").value = isVertexProvider(state.settings.provider) ? "vertex" : "openai";
       document.querySelector("#vertexProject").value = state.settings.vertexProject || "";
       document.querySelector("#vertexLocation").value = state.settings.vertexLocation || "global";
+      document.querySelector("#vertexClientId").value = state.settings.vertexClientId || "";
       updateProviderFields();
       els.baseUrl.value = state.settings.baseUrl;
       els.apiKey.value = state.settings.apiKey;
@@ -1663,6 +1782,8 @@
         item.innerHTML = `
           <div class="pb-header">
             <span class="pb-drag" title="Drag to reorder">&#8801;</span>
+            <button type="button" class="pb-icon-btn pb-up" aria-label="Move block up" ${index === 0 ? "disabled" : ""}>&#8593;</button>
+            <button type="button" class="pb-icon-btn pb-down" aria-label="Move block down" ${index === blocks.length - 1 ? "disabled" : ""}>&#8595;</button>
             <button class="pb-toggle${block.enabled ? " on" : ""}" type="button"
               ${isHistory ? 'disabled title="Chat history is always included"' : `aria-label="Toggle ${escapeHtml(block.label)}"`}
             ></button>
@@ -1683,7 +1804,18 @@
           </div>`}
         `;
 
+        for (const [selector, direction] of [[".pb-up", -1], [".pb-down", 1]]) {
+          item.querySelector(selector).addEventListener("click", () => {
+            const target = index + direction;
+            const [moved] = state.settings.promptBlocks.splice(index, 1);
+            state.settings.promptBlocks.splice(target, 0, moved);
+            saveState(); renderPromptBlocks();
+            els.promptBlockList.children[target].querySelector(selector).focus();
+          });
+        }
         const toggle = item.querySelector(".pb-toggle");
+        toggle.setAttribute("aria-pressed", String(!!block.enabled));
+        toggle.setAttribute("aria-label", `Include ${block.label}`);
         if (toggle && !isHistory) {
           toggle.addEventListener("click", () => {
             state.settings.promptBlocks[index].enabled = !state.settings.promptBlocks[index].enabled;
@@ -1693,6 +1825,15 @@
         }
 
         const roleBadge = item.querySelector(".pb-role");
+        if (!isHistory && !isCharacter) {
+          roleBadge.tabIndex = 0; roleBadge.setAttribute("role", "button");
+          roleBadge.setAttribute("aria-label", `Role: ${block.role}. Activate to change role`);
+          roleBadge.addEventListener("keydown", event => {
+            if (event.key === "Enter" || event.key === " ") { event.preventDefault(); roleBadge.click(); }
+          });
+        }
+        item.querySelector(".pb-content")?.setAttribute("aria-label", `${block.label} prompt`);
+        item.querySelector(".character-select")?.setAttribute("aria-label", "Character");
         if (roleBadge && !isHistory && !isCharacter) {
           roleBadge.addEventListener("click", () => {
             const roles = ["system", "user", "assistant"];
@@ -1927,7 +2068,7 @@
       const conversation = currentConversation();
       const message = conversation.messages[index];
       if (!message || message.role !== "assistant" || abortController) return;
-      if (!state.settings.apiKey) {
+      if (!isApiConfigured()) {
         els.settingsDialog.showModal();
         return;
       }
@@ -1960,6 +2101,7 @@
         message.content = previousContent;
         saveState();
         render();
+        showFeedback(els.chat, detail + " Try regenerating the response again.");
       } finally {
         abortController = null;
         setBusy(false);
@@ -1970,21 +2112,29 @@
       return url.trim().replace(/\/+$/, "");
     }
 
+    function isVertexProvider(provider = state.settings.provider) {
+      return provider === "vertex" || provider === "vertex-oauth";
+    }
+
+    function isVertexTokenExpired() {
+      return Boolean(state.settings.vertexAccessToken && state.settings.vertexTokenExpiry && Date.now() >= state.settings.vertexTokenExpiry);
+    }
+
+    function isApiConfigured() {
+      if (isVertexProvider()) {
+        return Boolean(state.settings.vertexAccessToken && !isVertexTokenExpired() && state.settings.vertexProject?.trim());
+      }
+      return Boolean(state.settings.apiKey);
+    }
+
     function chatEndpoint(stream = true, masked = false) {
-      if (state.settings.provider === "vertex-oauth") {
+      if (isVertexProvider()) {
         const project = state.settings.vertexProject?.trim();
         const location = state.settings.vertexLocation?.trim() || "global";
         if (!project) throw new Error("Enter your Google Cloud project ID in API settings.");
         if (!/^[a-z0-9-]+$/.test(location)) throw new Error("Enter a valid Vertex AI location, such as global or us-central1.");
         const host = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
         return `https://${host}/v1/projects/${encodeURIComponent(project)}/locations/${location}/publishers/google/models/${encodeURIComponent(state.settings.model)}:${stream ? "streamGenerateContent?alt=sse" : "generateContent"}`;
-      }
-      if (state.settings.provider === "vertex") {
-        const base = normalizeBaseUrl(state.settings.baseUrl).replace(/\/publishers\/google\/models$/, "");
-        const url = new URL(`${base}/${/\/v1(?:beta1)?$/.test(base) ? "" : "v1/"}publishers/google/models/${encodeURIComponent(state.settings.model)}:${stream ? "streamGenerateContent" : "generateContent"}`);
-        url.searchParams.set("key", masked ? "********" : state.settings.apiKey);
-        if (stream) url.searchParams.set("alt", "sse");
-        return url.toString();
       }
       return `${normalizeBaseUrl(state.settings.baseUrl)}/chat/completions`;
     }
@@ -1994,9 +2144,10 @@
       const stream = params.stream ?? true;
       const headers = { "Content-Type": "application/json" };
       let body;
-      if (state.settings.provider === "vertex" || state.settings.provider === "vertex-oauth") {
+      if (isVertexProvider()) {
         const { stream: ignored, ...options } = params;
-        if (state.settings.provider === "vertex-oauth") headers.Authorization = `Bearer ${masked ? "********" : state.settings.apiKey.replace(/^Bearer\s+/i, "")}`;
+        const token = (state.settings.vertexAccessToken || "").replace(/^Bearer\s+/i, "");
+        headers.Authorization = `Bearer ${masked ? "********" : token}`;
         const systemParts = messages.filter(message => message.role === "system").map(message => ({ text: message.content }));
         body = { ...options, contents: messages.filter(message => message.role !== "system").map(message => ({ role: message.role === "assistant" ? "model" : "user", parts: [{ text: message.content }] })) };
         if (systemParts.length) body.systemInstruction = { parts: [...(options.systemInstruction?.parts || []), ...systemParts] };
@@ -2009,7 +2160,7 @@
 
     function responseText(data, streaming = false) {
       if (data.error) throw new Error(data.error.message || "API request failed.");
-      if (state.settings.provider === "vertex" || state.settings.provider === "vertex-oauth") {
+      if (isVertexProvider()) {
         return (data.candidates?.[0]?.content?.parts || []).filter(part => !part.thought).map(part => part.text || "").join("");
       }
       return (streaming ? data.choices?.[0]?.delta?.content : data.choices?.[0]?.message?.content) || "";
@@ -2158,6 +2309,11 @@
       });
 
       if (!response.ok) {
+        if (response.status === 401 && isVertexProvider()) {
+          state.settings.vertexTokenExpiry = Date.now() - 1;
+          saveState();
+          updateVertexOAuthStatus();
+        }
         const data = await response.json().catch(() => ({}));
         const detail = data.error?.message || `${response.status} ${response.statusText}`;
         throw new Error(detail);
@@ -2245,6 +2401,16 @@
       } catch (error) {
         const message = error.name === "AbortError" ? "Request cancelled." : `Error: ${error.message}`;
         assistantBubble.textContent = message;
+        if (error.name !== "AbortError") {
+          const retry = document.createElement("button");
+          retry.type = "button"; retry.className = "secondary"; retry.textContent = "Retry response";
+          retry.addEventListener("click", () => {
+            if (abortController) return;
+            assistantBubble.closest(".message").remove();
+            followLatest = true; sendMessage("");
+          });
+          assistantBubble.append(document.createElement("br"), retry);
+        }
       } finally {
         abortController = null;
         setBusy(false);
@@ -2254,6 +2420,8 @@
     function setBusy(isBusy) {
       document.querySelectorAll(".delete-message, .insert-message, .branch-message, #chatMeta .secondary").forEach(button => { button.disabled = isBusy; });
       els.prompt.disabled = isBusy;
+      document.querySelector("#generationStatus").textContent = isBusy ? "Generating... Stop to cancel" : "";
+      if (!isBusy && !document.querySelector("dialog[open]")) els.prompt.focus();
       els.sendBtn.disabled = false;
       els.sendBtn.classList.toggle("cancel", isBusy);
       els.sendBtn.textContent = isBusy ? "×" : "↑";
@@ -2262,7 +2430,8 @@
 
     function scrollToBottom() {
       requestAnimationFrame(() => {
-        els.messages.scrollTop = els.messages.scrollHeight;
+        if (followLatest) els.messages.scrollTop = els.messages.scrollHeight;
+        document.querySelector("#jumpLatest").hidden = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 80;
       });
     }
 
@@ -2328,19 +2497,93 @@
       throw new Error("PNG has no embedded chara metadata.");
     }
 
+    const characterFields = [
+      ["name", "Name"], ["description", "Description"], ["personality", "Personality"],
+      ["scenario", "Scenario"], ["first_mes", "First message"], ["mes_example", "Example dialogue"],
+      ["system_prompt", "System prompt"], ["post_history_instructions", "Post-history instructions"],
+      ["creator_notes", "Creator notes"], ["creator", "Creator"], ["character_version", "Character version"]
+    ];
+
+    function characterExportData(card) {
+      return { spec: "chara_card_v2", spec_version: "2.0", data: {
+        description: "", personality: "", scenario: "", first_mes: "", mes_example: "",
+        creator_notes: "", system_prompt: "", post_history_instructions: "",
+        alternate_greetings: [], tags: [], creator: "", character_version: "", extensions: {},
+        ...card.data, name: card.name
+      } };
+    }
+
+    function exportCharacterCard(card) {
+      const filename = (card.name || "character").replace(/[<>:"/\\|?*\x00-\x1f]/g, "-").replace(/[. ]+$/g, "").slice(0, 100) || "character";
+      downloadJson(`${filename}.json`, characterExportData(card));
+    }
+
+    function openCharacterEditor(card) {
+      const dialog = document.querySelector("#characterEditorDialog");
+      dialog.dataset.characterId = card.id;
+      dialog.querySelector(".feedback")?.remove();
+      const fields = document.querySelector("#characterEditorFields"); fields.replaceChildren();
+      const extra = { ...card.data };
+      for (const [key, title] of characterFields) {
+        const label = document.createElement("label"); label.textContent = title;
+        const input = document.createElement(["name", "creator", "character_version"].includes(key) ? "input" : "textarea");
+        input.name = key; input.id = `characterField-${key}`;
+        input.value = card.data[key] ?? (key === "name" ? card.name : "");
+        if (key === "name") { input.required = true; input.maxLength = 200; }
+        if (input.tagName === "TEXTAREA") input.rows = 4;
+        label.append(input); fields.append(label); delete extra[key];
+      }
+      document.querySelector("#characterExtraData").value = JSON.stringify(extra, null, 2);
+      dialog.showModal();
+    }
+
+    document.querySelector("#characterEditorForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const dialog = document.querySelector("#characterEditorDialog");
+      const card = state.characters.find(item => item.id === dialog.dataset.characterId);
+      if (!card) { showFeedback(dialog, "This character no longer exists. Close the editor and choose another card."); return; }
+      let extra;
+      try {
+        extra = JSON.parse(document.querySelector("#characterExtraData").value);
+        if (!extra || typeof extra !== "object" || Array.isArray(extra)) throw new Error("Use a JSON object.");
+      } catch (error) {
+        showFeedback(dialog, `Additional card data is invalid: ${error.message}`);
+        document.querySelector("#characterExtraData").closest("details").open = true;
+        document.querySelector("#characterExtraData").focus(); return;
+      }
+      const data = { ...extra };
+      for (const [key] of characterFields) data[key] = event.currentTarget.elements.namedItem(key).value;
+      data.name = data.name.trim();
+      if (!data.name) { showFeedback(dialog, "Enter a character name."); document.querySelector("#characterField-name").focus(); return; }
+      card.data = data; card.name = data.name;
+      lastRequestPreview = null; saveState(); render(); renderCharacters();
+      if (els.promptOrderDialog.open) renderPromptBlocks();
+      if (event.submitter?.value === "export") exportCharacterCard(card);
+      dialog.close();
+    });
+
     function renderCharacters() {
       els.characterList.innerHTML = "";
       if (!state.characters.length) els.characterList.textContent = "No character cards imported.";
       for (const card of state.characters) {
         const row = document.createElement("div"); row.className = "card-row";
         const info = document.createElement("div"); const strong = document.createElement("strong"); strong.textContent = card.name;
-        const small = document.createElement("small"); small.textContent = (card.data.description || "No description").slice(0, 100);
+        const small = document.createElement("small"); small.textContent = String(card.data.description || "No description").slice(0, 100);
         info.append(strong, small);
         const use = document.createElement("button"); use.className = "secondary"; use.textContent = currentConversation().characterId === card.id ? "Selected" : "Use";
         use.addEventListener("click", () => { selectCharacter(currentConversation(), card.id); renderCharacters(); });
         const remove = document.createElement("button"); remove.className = "icon-btn"; remove.innerHTML = "&#10005;"; remove.title = "Delete card";
         remove.addEventListener("click", () => { state.characters = state.characters.filter(c => c.id !== card.id); state.conversations.forEach(c => { if (c.characterId === card.id) c.characterId = null; }); saveState(); renderCharacters(); render(); });
-        row.append(info, use, remove); els.characterList.append(row);
+        const edit = document.createElement("button"); edit.type = "button"; edit.className = "secondary"; edit.textContent = "Edit";
+        edit.setAttribute("aria-label", `Edit ${card.name}`);
+        edit.addEventListener("click", () => openCharacterEditor(card));
+        const exportButton = document.createElement("button"); exportButton.type = "button"; exportButton.className = "secondary"; exportButton.textContent = "Export";
+        exportButton.setAttribute("aria-label", `Export ${card.name} as JSON`);
+        exportButton.addEventListener("click", () => exportCharacterCard(card));
+        remove.setAttribute("aria-label", `Delete ${card.name}`);
+        const actions = document.createElement("div"); actions.className = "card-actions";
+        actions.append(use, edit, exportButton, remove);
+        row.append(info, actions); els.characterList.append(row);
       }
     }
 
@@ -2352,10 +2595,11 @@
         return;
       }
       if (!content && !currentConversation().messages.length) return;
-      if (!state.settings.apiKey) {
+      if (!isApiConfigured()) {
         els.settingsDialog.showModal();
         return;
       }
+      followLatest = true;
       els.prompt.value = "";
       resizePrompt();
       sendMessage(content);
@@ -2363,7 +2607,7 @@
 
     els.prompt.addEventListener("input", resizePrompt);
     els.prompt.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
         event.preventDefault();
         els.chatForm.requestSubmit();
       }
@@ -2374,14 +2618,14 @@
       state.conversations.unshift(conversation);
       state.currentId = conversation.id;
       saveState();
-      els.sidebar.classList.remove("open");
+      setSidebar(false);
       render();
       els.prompt.focus();
     });
 
     els.chatSearch.addEventListener("input", renderConversations);
     els.favoritesFilterBtn.addEventListener("click", () => {
-      favoritesOnly = !favoritesOnly; els.favoritesFilterBtn.classList.toggle("on", favoritesOnly);
+      favoritesOnly = !favoritesOnly; els.favoritesFilterBtn.setAttribute("aria-pressed", String(favoritesOnly)); els.favoritesFilterBtn.classList.toggle("on", favoritesOnly);
       els.favoritesFilterBtn.innerHTML = favoritesOnly ? "&#9733;" : "&#9734;"; renderConversations();
     });
     els.favoriteBtn.addEventListener("click", () => {
@@ -2408,7 +2652,7 @@
     els.characterFile.addEventListener("change", async () => {
       const file = els.characterFile.files[0]; if (!file) return;
       try { const card = await readCharacterCard(file); state.characters.push(card); saveState(); renderCharacters(); }
-      catch (error) { alert(`Character import failed: ${error.message}`); }
+      catch (error) { showFeedback(els.charactersDialog, `Character import failed: ${error.message}. Choose a valid JSON or PNG character card and try again.`); }
       finally { els.characterFile.value = ""; }
     });
     els.chatDataBtn.addEventListener("click", () => els.chatDataDialog.showModal());
@@ -2417,12 +2661,12 @@
     els.chatFile.addEventListener("change", async () => {
       const file = els.chatFile.files[0]; if (!file) return;
       try { await importChats(file); els.chatDataDialog.close(); }
-      catch (error) { alert(`Chat import failed: ${error.message}`); }
+      catch (error) { showFeedback(els.chatDataDialog, `Chat import failed: ${error.message}. Choose a chat export JSON file and try again.`); }
       finally { els.chatFile.value = ""; }
     });
     els.requestPreviewBtn.addEventListener("click", () => { lastRequestPreview = null; previewCurrentRequest(); els.requestPreviewDialog.showModal(); });
     els.refreshPreviewBtn.addEventListener("click", () => { lastRequestPreview = null; previewCurrentRequest(); });
-    els.copyPreviewBtn.addEventListener("click", async () => { try { await navigator.clipboard.writeText(els.requestPreview.textContent); els.copyPreviewBtn.textContent = "Copied"; setTimeout(() => els.copyPreviewBtn.textContent = "Copy JSON", 1200); } catch { alert("Clipboard access was denied."); } });
+    els.copyPreviewBtn.addEventListener("click", async () => { try { await navigator.clipboard.writeText(els.requestPreview.textContent); els.copyPreviewBtn.textContent = "Copied"; setTimeout(() => els.copyPreviewBtn.textContent = "Copy JSON", 1200); } catch { showFeedback(els.requestPreviewDialog, "Clipboard access was denied. Select the preview text and copy it manually."); } });
     document.querySelectorAll(".dialog-close").forEach(button => button.addEventListener("click", () => button.closest("dialog").close()));
     document.querySelector("#addMessageForm").addEventListener("submit", event => {
       event.preventDefault();
@@ -2432,19 +2676,156 @@
       if (insertMessage(conversation, Number(document.querySelector("#addMessagePosition").value), document.querySelector("#addMessageRole").value, document.querySelector("#addMessageContent").value)) dialog.close();
     });
 
+    function updateVertexOAuthStatus() {
+      const statusEl = document.querySelector("#vertexOAuthStatus");
+      const signInBtn = document.querySelector("#vertexOAuthBtn");
+      const signOutBtn = document.querySelector("#vertexSignOutBtn");
+      const hasToken = Boolean(state.settings.vertexAccessToken);
+      const expired = isVertexTokenExpired();
+      signOutBtn.hidden = !hasToken;
+      if (!hasToken) {
+        signInBtn.textContent = "Sign in with Google OAuth";
+        statusEl.textContent = "Not signed in. Enter your Google OAuth Client ID and sign in to obtain a Vertex AI token.";
+        return;
+      }
+      if (expired) {
+        signInBtn.textContent = "Reconnect Google OAuth";
+        statusEl.textContent = "OAuth token expired. Sign in again to refresh your Vertex AI session.";
+        return;
+      }
+      signInBtn.textContent = "Refresh OAuth token";
+      if (state.settings.vertexTokenExpiry) {
+        const expiryTime = new Date(state.settings.vertexTokenExpiry).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        statusEl.textContent = `Signed in with Google OAuth (expires around ${expiryTime}).`;
+      } else {
+        statusEl.textContent = "Signed in with Google OAuth.";
+      }
+    }
+
+    function applyVertexOAuthToken(accessToken, expiresIn = 3600) {
+      state.settings.vertexAccessToken = accessToken;
+      state.settings.vertexTokenExpiry = expiresIn ? Date.now() + Number(expiresIn) * 1000 : 0;
+      lastRequestPreview = null;
+      saveState();
+      updateVertexOAuthStatus();
+      render();
+    }
+
+    function consumeOAuthRedirectHash() {
+      if (!window.location.hash || !window.location.hash.includes("access_token=")) return;
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      const accessToken = params.get("access_token");
+      const expiresIn = Number(params.get("expires_in")) || 3600;
+      const error = params.get("error");
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (window.opener && window.opener !== window) {
+        window.opener.postMessage({ type: "vertex-oauth-token", accessToken, expiresIn, error }, window.location.origin);
+        window.close();
+        return;
+      }
+      if (accessToken) {
+        state.settings.provider = "vertex";
+        applyVertexOAuthToken(accessToken, expiresIn);
+      }
+    }
+
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin || event.data?.type !== "vertex-oauth-token") return;
+      if (event.data.error) {
+        showFeedback(els.settingsDialog, `Google OAuth failed: ${event.data.error}`);
+        return;
+      }
+      if (event.data.accessToken) {
+        applyVertexOAuthToken(event.data.accessToken, event.data.expiresIn);
+      }
+    });
+
+    function startVertexOAuthLogin() {
+      if (window.location.protocol === "file:" || window.location.origin === "null") {
+        showFeedback(els.settingsDialog, "Google OAuth does not work from file:// URLs. Open this page via a local HTTP server (for example: python -m http.server 8000, then visit http://localhost:8000).");
+        return;
+      }
+      const clientIdInput = document.querySelector("#vertexClientId");
+      const clientId = clientIdInput.value.trim();
+      if (!clientId) {
+        showFeedback(els.settingsDialog, "Enter your Google OAuth Client ID before signing in.");
+        clientIdInput.focus();
+        return;
+      }
+      state.settings.provider = "vertex";
+      state.settings.vertexClientId = clientId;
+      state.settings.vertexProject = document.querySelector("#vertexProject").value.trim() || state.settings.vertexProject;
+      state.settings.vertexLocation = document.querySelector("#vertexLocation").value.trim() || state.settings.vertexLocation || "global";
+      saveState();
+
+      if (window.google?.accounts?.oauth2?.initTokenClient) {
+        try {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: clientId,
+            scope: VERTEX_OAUTH_SCOPE,
+            callback: (response) => {
+              if (response.error) {
+                showFeedback(els.settingsDialog, `Google OAuth failed: ${response.error_description || response.error}`);
+                return;
+              }
+              if (response.access_token) {
+                applyVertexOAuthToken(response.access_token, response.expires_in);
+              }
+            },
+            error_callback: (err) => {
+              if (err?.type !== "popup_closed") {
+                showFeedback(els.settingsDialog, `Google OAuth error: ${err?.message || err?.type || "Authentication could not be completed."}`);
+              }
+            }
+          });
+          tokenClient.requestAccessToken({ prompt: "consent" });
+          return;
+        } catch (error) {
+          console.warn("GIS token client failed, falling back to OAuth popup:", error);
+        }
+      }
+
+      const redirectUri = window.location.origin + window.location.pathname;
+      const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      authUrl.searchParams.set("client_id", clientId);
+      authUrl.searchParams.set("redirect_uri", redirectUri);
+      authUrl.searchParams.set("response_type", "token");
+      authUrl.searchParams.set("scope", VERTEX_OAUTH_SCOPE);
+      authUrl.searchParams.set("include_granted_scopes", "true");
+      authUrl.searchParams.set("prompt", "select_account");
+      const popup = window.open(authUrl.toString(), "vertex-oauth", "width=520,height=640");
+      if (!popup) {
+        window.location.assign(authUrl.toString());
+      }
+    }
+
     function updateProviderFields() {
-      const oauth = document.querySelector("#provider").value === "vertex-oauth";
-      document.querySelector("#vertexOAuthFields").hidden = !oauth;
-      document.querySelector("#vertexProject").required = oauth;
-      document.querySelector("#credentialLabel").textContent = oauth ? "OAuth access token" : "API key";
-      els.apiKey.placeholder = oauth ? "Paste gcloud access token" : "API key";
-      els.baseUrl.disabled = oauth;
+      const vertex = isVertexProvider(document.querySelector("#provider").value);
+      document.querySelector("#vertexOAuthFields").hidden = !vertex;
+      document.querySelector("#vertexProject").required = vertex;
+      document.querySelector("#baseUrlField").hidden = vertex;
+      els.baseUrl.disabled = vertex;
+      els.baseUrl.required = !vertex;
+      document.querySelector("#apiKeyField").hidden = vertex;
+      els.apiKey.disabled = vertex;
+      updateVertexOAuthStatus();
     }
 
     document.querySelector("#provider").addEventListener("change", updateProviderFields);
+    document.querySelector("#vertexOAuthBtn").addEventListener("click", startVertexOAuthLogin);
+    document.querySelector("#vertexSignOutBtn").addEventListener("click", () => {
+      state.settings.vertexAccessToken = "";
+      state.settings.vertexTokenExpiry = 0;
+      lastRequestPreview = null;
+      saveState();
+      updateVertexOAuthStatus();
+      render();
+    });
     document.querySelector("#vertexPresetBtn").addEventListener("click", () => {
       document.querySelector("#provider").value = "vertex";
-      els.baseUrl.value = "https://aiplatform.googleapis.com/v1";
+      if (!document.querySelector("#vertexLocation").value.trim()) {
+        document.querySelector("#vertexLocation").value = "global";
+      }
       els.model.value = "gemini-4-argon";
       els.paramsYaml.value = JSON.stringify(VERTEX_PARAMS, null, 2);
       updateProviderFields();
@@ -2461,12 +2842,12 @@
     els.cancelSettingsBtn.addEventListener("click", () => els.settingsDialog.close());
     els.menuBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      els.sidebar.classList.toggle("open");
+      setSidebar(!els.sidebar.classList.contains("open"));
     });
 
     els.chat.addEventListener("click", (event) => {
       if (event.target.closest("#menuBtn")) return;
-      if (els.sidebar.classList.contains("open")) els.sidebar.classList.remove("open");
+      if (els.sidebar.classList.contains("open")) setSidebar(false);
     });
 
     els.settingsForm.addEventListener("submit", (event) => {
@@ -2475,17 +2856,23 @@
       try {
         parseYamlParams(paramsYaml);
       } catch (error) {
-        alert(`Parameter error: ${error.message}`);
+        showFeedback(els.settingsDialog, `Parameter error: ${error.message}. Correct the parameters and save again.`);
         els.paramsYaml.focus();
         return;
       }
+      const provider = document.querySelector("#provider").value;
+      const vertex = isVertexProvider(provider);
+      if (vertex && !state.settings.vertexAccessToken) {
+        showFeedback(els.settingsDialog, "Sign in with Google OAuth to connect Vertex AI before saving, or sign in now.");
+      }
       state.settings = {
         ...state.settings,
-        provider: document.querySelector("#provider").value,
+        provider,
         vertexProject: document.querySelector("#vertexProject").value.trim(),
         vertexLocation: document.querySelector("#vertexLocation").value.trim() || "global",
+        vertexClientId: document.querySelector("#vertexClientId").value.trim(),
         baseUrl: normalizeBaseUrl(els.baseUrl.value) || DEFAULT_SETTINGS.baseUrl,
-        apiKey: els.apiKey.value.trim(),
+        apiKey: vertex ? "" : els.apiKey.value.trim(),
         model: els.model.value.trim() || DEFAULT_SETTINGS.model,
         paramsYaml
       };
@@ -2494,10 +2881,55 @@
       render();
     });
 
+
+    function showFeedback(container, message) {
+      container.querySelector(".feedback")?.remove();
+      const feedback = document.createElement("div");
+      feedback.className = "feedback"; feedback.setAttribute("role", "alert");
+      const text = document.createElement("span"); text.textContent = message;
+      const dismiss = document.createElement("button"); dismiss.type = "button";
+      dismiss.className = "icon-btn"; dismiss.textContent = "Close"; dismiss.setAttribute("aria-label", "Dismiss notification");
+      dismiss.addEventListener("click", () => feedback.remove());
+      feedback.append(text, dismiss);
+      (container.querySelector(".settings") || container).append(feedback);
+    }
+
+    const desktopNavigation = matchMedia("(min-width: 1200px)");
+    function setSidebar(open, restoreFocus = false) {
+      const visible = desktopNavigation.matches || open;
+      els.sidebar.classList.toggle("open", open);
+      els.sidebar.inert = !visible;
+      els.menuBtn.setAttribute("aria-expanded", String(visible));
+      els.menuBtn.setAttribute("aria-label", visible ? "Close chats" : "Open chats");
+      if (open && !desktopNavigation.matches) els.chatSearch.focus();
+      if (restoreFocus && !desktopNavigation.matches) els.menuBtn.focus();
+    }
+    desktopNavigation.addEventListener("change", () => setSidebar(false));
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !document.querySelector("dialog[open]") && els.sidebar.classList.contains("open")) {
+        setSidebar(false, true);
+      }
+    });
+    els.messages.addEventListener("scroll", () => {
+      followLatest = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 80;
+      document.querySelector("#jumpLatest").hidden = followLatest;
+    });
+    document.querySelector("#jumpLatest").addEventListener("click", () => { followLatest = true; scrollToBottom(); });
+    document.querySelectorAll("dialog").forEach(dialog => {
+      const heading = dialog.querySelector("h3");
+      if (heading) { heading.id ||= dialog.id + "Title"; dialog.setAttribute("aria-labelledby", heading.id); }
+      dialog.querySelectorAll(".dialog-close").forEach(button => {
+        if (!button.textContent.trim().match(/[a-z]/i)) button.setAttribute("aria-label", "Close dialog");
+      });
+      dialog.addEventListener("close", () => dialog.querySelector(".feedback")?.remove());
+    });
+    setSidebar(false);
+
     window.addEventListener("beforeunload", () => {
       if (abortController) abortController.abort();
     });
 
+    consumeOAuthRedirectHash();
     render();
   </script>
 </body>
